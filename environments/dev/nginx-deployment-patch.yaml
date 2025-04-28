@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 1  # 开发环境只需要1个副本
+  template:
+    spec:
+      containers:
+      - name: nginx
+        env:
+        - name: ENVIRONMENT
+          value: "development"
