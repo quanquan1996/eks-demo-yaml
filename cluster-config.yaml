@@ -1,0 +1,47 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: mytest
+  region: us-west-2
+  version: "1.27"  # 指定Kubernetes版本
+
+# 如果需要更新现有集群的节点组
+managedNodeGroups:
+  - name: managed-ng
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 4
+    desiredCapacity: 2
+    volumeSize: 20
+    tags:
+      environment: dev
+    iam:
+      withAddonPolicies:
+        albIngress: true
+        cloudWatch: true
+        autoScaler: true
+
+# 启用集群附加组件
+addons:
+  - name: vpc-cni
+    version: latest
+  - name: coredns
+    version: latest
+  - name: kube-proxy
+    version: latest
+
+# 配置IAM OIDC提供商和服务账户
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+    - metadata:
+        name: prometheus
+        namespace: monitoring
+      wellKnownPolicies:
+        cloudWatch: true
