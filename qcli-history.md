@@ -313,3 +313,44 @@ aws eks create-nodegroup --cluster-name mytest --nodegroup-name managed-ng-new -
 - 只使用1个节点（而不是之前的2个）
 - 只使用1个子网（而不是之前的2个）
 - 其他配置保持不变
+
+## 访问权限配置与节点状态更新
+
+**Amazon Q**:
+检查新节点组状态，发现节点组仍在创建中，但节点实例已经启动：
+
+```bash
+# 检查新节点组状态
+aws eks describe-nodegroup --cluster-name mytest --nodegroup-name managed-ng-new --region us-west-2
+
+# 检查旧节点组状态
+aws eks describe-nodegroup --cluster-name mytest --nodegroup-name managed-ng --region us-west-2
+# 结果: ResourceNotFoundException - 旧节点组已删除
+
+# 检查新节点组的EC2实例
+aws ec2 describe-instances --filters "Name=tag:eks:cluster-name,Values=mytest" "Name=tag:eks:nodegroup-name,Values=managed-ng-new" --region us-west-2
+```
+
+发现新节点已启动，但仍然无法使用kubectl访问集群。这是因为集群使用API认证模式，需要配置访问权限：
+
+```bash
+# 创建访问条目
+aws eks create-access-entry --cluster-name mytest --principal-arn arn:aws:iam::051826712157:user/qpjdemo --region us-west-2
+
+# 关联管理员访问策略
+aws eks associate-access-policy --cluster-name mytest --principal-arn arn:aws:iam::051826712157:user/qpjdemo --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy --access-scope type=cluster --region us-west-2
+```
+
+配置完成后，成功访问集群：
+```bash
+kubectl get nodes
+```
+
+结果显示：
+- 两个之前存在的节点已经Ready
+- 新创建的节点处于NotReady状态，原因是：
+  ```
+  KubeletNotReady: container runtime network not ready: NetworkReady=false reason:NetworkPluginNotReady message:cni plugin not initialized
+  ```
+
+这表明新节点的CNI插件尚未初始化完成，需要等待或检查CNI配置。
