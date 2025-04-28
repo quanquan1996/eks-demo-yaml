@@ -26,14 +26,37 @@ eks-demo-yaml/
 
 ## 快速部署
 
-使用提供的部署脚本可以一键部署所有配置：
+提供了多种部署脚本选项，可以根据需要选择：
+
+### 1. 混合部署方式（推荐）
+
+结合使用 eksctl、Helm 和 kubectl 的优势：
+
+```bash
+# 运行混合部署脚本
+./deploy-hybrid.sh
+```
+
+这个脚本会：
+- 使用 eksctl 管理集群基础设施和IAM角色
+- 使用 Helm 部署复杂组件（如AWS Load Balancer Controller和Prometheus）
+- 使用 kubectl 部署应用资源
+
+### 2. 仅使用 kubectl 部署
 
 ```bash
 # 确保您已连接到EKS集群
 aws eks update-kubeconfig --name your-cluster-name --region your-region
 
-# 运行部署脚本
+# 运行kubectl部署脚本
 ./deploy-eks-config.sh
+```
+
+### 3. 使用 eksctl 管理集群配置
+
+```bash
+# 应用或更新集群配置
+eksctl apply -f cluster-config.yaml
 ```
 
 ## 部署的资源
@@ -77,6 +100,31 @@ kubectl apply -f applications/app1/
 kubectl apply -k environments/dev/
 ```
 
+## 使用 eksctl 管理集群
+
+### 查看集群状态
+```bash
+eksctl get cluster --name=mytest --region=us-west-2
+```
+
+### 管理节点组
+```bash
+# 查看节点组
+eksctl get nodegroup --cluster=mytest --region=us-west-2
+
+# 扩展节点组
+eksctl scale nodegroup --cluster=mytest --name=managed-ng --nodes=3 --region=us-west-2
+```
+
+### 管理附加组件
+```bash
+# 列出可用附加组件
+eksctl utils describe-addon-versions --cluster=mytest --region=us-west-2
+
+# 安装或更新附加组件
+eksctl create addon --name vpc-cni --cluster=mytest --region=us-west-2
+```
+
 ## 最佳实践
 
 1. 所有配置更改通过Git管理
@@ -84,12 +132,16 @@ kubectl apply -k environments/dev/
 3. 通过Pull Request进行代码审查
 4. 使用标签和注释记录变更
 5. 定期审查和清理未使用的配置
+6. 使用eksctl管理AWS特定资源，kubectl管理Kubernetes资源
 
 ## 先决条件
 
 在部署之前，请确保：
 
 1. 已创建EKS集群
-2. 已配置kubectl以连接到您的集群
-3. 已创建必要的IAM角色，特别是`AmazonEKSLoadBalancerControllerRole`
-4. 已安装AWS CLI并配置了适当的权限
+2. 已安装必要的工具：
+   - AWS CLI
+   - kubectl
+   - eksctl
+   - Helm (用于混合部署)
+3. 已配置AWS凭证，具有适当的权限
