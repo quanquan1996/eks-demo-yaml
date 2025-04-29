@@ -354,3 +354,74 @@ kubectl get nodes
   ```
 
 这表明新节点的CNI插件尚未初始化完成，需要等待或检查CNI配置。
+## CNI 插件安装与节点组状态
+
+**Amazon Q**:
+检查集群状态，发现新节点组已经创建失败：
+
+```bash
+# 检查节点组状态
+aws eks describe-nodegroup --cluster-name mytest --nodegroup-name managed-ng-new --region us-west-2
+```
+
+结果显示：
+```json
+"status": "CREATE_FAILED",
+"health": {
+    "issues": [
+        {
+            "code": "NodeCreationFailure",
+            "message": "Unhealthy nodes in the kubernetes cluster",
+            "resourceIds": [
+                "i-0e91b0290dcb4663c"
+            ]
+        }
+    ]
+}
+```
+
+检查节点状态，发现节点仍然处于 NotReady 状态，原因是 CNI 插件未初始化：
+
+```bash
+kubectl describe node ip-192-168-176-52.us-west-2.compute.internal
+```
+
+错误信息：
+```
+Ready            False   Tue, 29 Apr 2025 02:51:38 +0000   Mon, 28 Apr 2025 09:12:54 +0000   KubeletNotReady              container runtime network not ready: NetworkReady=false reason:NetworkPluginNotReady message:Network plugin returns error: cni plugin not initialized
+```
+
+检查集群中的 CNI 组件，发现没有 AWS VPC CNI 插件的 DaemonSet：
+
+```bash
+kubectl get daemonset -n kube-system
+# 结果: No resources found in kube-system namespace.
+```
+
+安装 AWS VPC CNI 插件：
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/master/config/master/aws-k8s-cni.yaml
+```
+
+安装后检查 CNI 插件状态：
+
+```bash
+kubectl get daemonset -n kube-system
+kubectl get pods -n kube-system -l k8s-app=aws-node
+```
+
+CNI 插件正在启动，但 aws-node 容器尚未就绪：
+
+```
+NAME             READY   STATUS    RESTARTS   AGE
+aws-node-vt8vv   1/2     Running   0          21s
+```
+
+检查 Pod 详情，发现 aws-node 容器的就绪探针失败：
+
+```
+Warning  Unhealthy  20s   kubelet            Readiness probe failed: {"level":"info","ts":"2025-04-29T02:54:50.961Z","caller":"/usr/local/go/src/runtime/proc.go:271","msg":"timeout: failed to connect service \":50051\" within 5s"}
+```
+
+节点仍处于 NotReady 状态，但 CNI 插件已经开始安装，预计在几分钟内完成初始化。
